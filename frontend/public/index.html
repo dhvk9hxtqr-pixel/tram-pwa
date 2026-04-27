@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a1628">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Justificatif de Voyage</title>
+<link rel="manifest" href="/manifest.json">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #06111f;
+    --surface:   #0d1f35;
+    --card:      #112540;
+    --accent:    #00d4ff;
+    --accent2:   #0099cc;
+    --gold:      #f0a500;
+    --green:     #00e676;
+    --red:       #ff5252;
+    --text:      #e8f4fd;
+    --muted:     #5d7a96;
+    --border:    rgba(0, 212, 255, 0.15);
+    --radius:    16px;
+    --font-main: 'Syne', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-main);
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .screen {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 20px;
+    z-index: 10;
+    transition: opacity 0.4s ease;
+  }
+  .screen.hidden { opacity: 0; pointer-events: none; }
+
+  #screen-loading { background: var(--bg); gap: 24px; }
+  .loader-logo { font-size: 14px; letter-spacing: 4px; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+  .loader-bar { width: 200px; height: 2px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .loader-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent2), var(--accent)); border-radius: 2px; animation: load 1.2s ease-in-out forwards; }
+  @keyframes load { from { width: 0% } to { width: 100% } }
+
+  #screen-hidden { background: var(--bg); gap: 20px; text-align: center; }
+  .hidden-icon { font-size: 56px; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.95); } }
+  .hidden-title { font-size: 20px; font-weight: 700; color: var(--gold); }
+  .hidden-sub { font-size: 14px; color: var(--muted); max-width: 260px; }
+
+  #screen-expired { background: var(--bg); gap: 20px; text-align: center; }
+  .expired-icon { font-size: 56px; }
+  .expired-title { font-size: 22px; font-weight: 800; color: var(--red); }
+  .expired-sub { font-size: 14px; color: var(--muted); max-width: 260px; }
+
+  #screen-ticket { justify-content: flex-start; padding: 0; overflow-y: auto; background: var(--bg); }
+
+  .ticket-wrapper {
+    width: 100%; max-width: 420px; margin: 0 auto;
+    padding: 20px 16px 40px;
+    display: flex; flex-direction: column; gap: 14px; position: relative;
+  }
+
+  .top-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 0 4px; }
+  .logo-area { display: flex; align-items: center; gap: 10px; }
+  .logo-icon { width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent2), var(--accent)); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .logo-text { font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--accent); }
+  .logo-sub { font-size: 10px; color: var(--muted); margin-top: -2px; }
+  .valid-badge { display: flex; align-items: center; gap: 6px; background: rgba(0,230,118,0.1); border: 1px solid rgba(0,230,118,0.3); border-radius: 20px; padding: 5px 12px; font-size: 11px; font-weight: 600; color: var(--green); letter-spacing: 1px; }
+  .valid-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: blink 1.5s infinite; }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  .timer-banner { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; position: relative; overflow: hidden; }
+  .timer-label { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+  .timer-value { font-family: var(--font-mono); font-size: 22px; font-weight: 500; color: var(--accent); letter-spacing: 2px; }
+  .timer-value.warning { color: var(--gold); }
+  .timer-value.danger { color: var(--red); animation: shake 0.5s infinite; }
+  @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-2px); } 75% { transform: translateX(2px); } }
+  .timer-bar-wrap { height: 3px; background: rgba(255,255,255,0.05); border-radius: 2px; margin-top: 10px; overflow: hidden; }
+  .timer-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent2), var(--accent)); border-radius: 2px; transition: width 1s linear, background 1s; }
+
+  .qr-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 16px; position: relative; overflow: hidden; }
+  .qr-card::before { content: ''; position: absolute; top: -40px; right: -40px; width: 120px; height: 120px; background: radial-gradient(circle, rgba(0,212,255,0.08), transparent 70%); border-radius: 50%; }
+  .qr-title { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .qr-container { background: white; border-radius: 12px; padding: 16px; position: relative; }
+  .qr-container canvas, .qr-container img { display: block; border-radius: 4px; }
+  .qr-watermark { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; opacity: 0.08; font-family: var(--font-mono); font-size: 9px; font-weight: 700; color: #000; letter-spacing: 1px; transform: rotate(-30deg); white-space: nowrap; overflow: hidden; border-radius: 12px; }
+  .qr-rotate-info { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); }
+  .rotate-timer { font-family: var(--font-mono); font-size: 13px; color: var(--accent); font-weight: 500; }
+  .rotate-icon { animation: spin 30s linear infinite; display: inline-block; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  .separator { display: flex; align-items: center; gap: 12px; }
+  .sep-line { flex: 1; height: 1px; background: var(--border); }
+  .sep-dots { display: flex; gap: 4px; }
+  .sep-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); opacity: 0.4; }
+
+  .journey-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .journey-header { background: linear-gradient(135deg, rgba(0,153,204,0.2), rgba(0,212,255,0.05)); border-bottom: 1px solid var(--border); padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; }
+  .journey-header-title { font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--accent); }
+  .line-badge { background: var(--accent); color: var(--bg); font-family: var(--font-mono); font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 8px; letter-spacing: 1px; }
+  .journey-body { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+  .info-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .info-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; min-width: 90px; }
+  .info-value { font-size: 14px; font-weight: 600; text-align: right; color: var(--text); }
+  .info-value.mono { font-family: var(--font-mono); font-size: 13px; letter-spacing: 1px; }
+  .amount-value { font-size: 20px; font-weight: 800; color: var(--gold); }
+
+  .security-footer { background: rgba(0,212,255,0.03); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; display: flex; flex-direction: column; gap: 8px; }
+  .sec-row { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--muted); }
+  .sec-icon { font-size: 13px; }
+  .session-id { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 1px; opacity: 0.6; }
+
+  #global-watermark { position: fixed; inset: 0; pointer-events: none; z-index: 1000; overflow: hidden; }
+  #global-watermark canvas { width: 100%; height: 100%; opacity: 0.04; }
+
+  @keyframes fadeSlideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+  .ticket-wrapper > * { animation: fadeSlideUp 0.5s ease both; }
+  .ticket-wrapper > *:nth-child(1) { animation-delay: 0.05s; }
+  .ticket-wrapper > *:nth-child(2) { animation-delay: 0.10s; }
+  .ticket-wrapper > *:nth-child(3) { animation-delay: 0.15s; }
+  .ticket-wrapper > *:nth-child(4) { animation-delay: 0.20s; }
+  .ticket-wrapper > *:nth-child(5) { animation-delay: 0.25s; }
+  .ticket-wrapper > *:nth-child(6) { animation-delay: 0.30s; }
+</style>
+</head>
+<body>
+
+<div id="global-watermark"><canvas id="wm-canvas"></canvas></div>
+
+<div id="screen-loading" class="screen">
+  <div class="loader-logo">🚋 Tramway</div>
+  <div class="loader-bar"><div class="loader-bar-fill"></div></div>
+  <div style="font-size:12px;color:var(--muted);letter-spacing:1px">Vérification du justificatif…</div>
+</div>
+
+<div id="screen-hidden" class="screen hidden">
+  <div class="hidden-icon">🔒</div>
+  <div class="hidden-title">Contenu masqué</div>
+  <div class="hidden-sub">Revenez sur cet onglet pour afficher votre justificatif de voyage.</div>
+</div>
+
+<div id="screen-expired" class="screen hidden">
+  <div class="expired-icon">⏰</div>
+  <div class="expired-title">Justificatif expiré</div>
+  <div class="expired-sub">Ce justificatif n'est plus valide. La durée de validité de 60 minutes est dépassée.</div>
+</div>
+
+<div id="screen-ticket" class="screen hidden">
+  <div class="ticket-wrapper">
+    <div class="top-header">
+      <div class="logo-area">
+        <div class="logo-icon">🚋</div>
+        <div>
+          <div class="logo-text">Tramway</div>
+          <div class="logo-sub">Justificatif de voyage</div>
+        </div>
+      </div>
+      <div class="valid-badge"><div class="valid-dot"></div>VALIDE</div>
+    </div>
+
+    <div class="timer-banner">
+      <div>
+        <div class="timer-label">Validité restante</div>
+        <div class="timer-value" id="timer-display">--:--</div>
+      </div>
+      <div style="text-align:right">
+        <div class="timer-label">Émis le</div>
+        <div style="font-family:var(--font-mono);font-size:13px;margin-top:4px" id="issued-time">--</div>
+      </div>
+      <div class="timer-bar-wrap" style="position:absolute;bottom:0;left:0;right:0;margin:0;border-radius:0 0 16px 16px">
+        <div class="timer-bar-fill" id="timer-bar" style="width:100%"></div>
+      </div>
+    </div>
+
+    <div class="qr-card">
+      <div class="qr-title">🔐 Code de validation sécurisé</div>
+      <div class="qr-container" id="qr-wrap">
+        <div id="qrcode"></div>
+        <div class="qr-watermark" id="qr-watermark-text"></div>
+      </div>
+      <div class="qr-rotate-info">
+        <span class="rotate-icon">🔄</span>
+        <span>Renouvellement dans</span>
+        <span class="rotate-timer" id="qr-rotate-timer">--s</span>
+      </div>
+    </div>
+
+    <div class="separator">
+      <div class="sep-line"></div>
+      <div class="sep-dots"><div class="sep-dot"></div><div class="sep-dot"></div><div class="sep-dot"></div></div>
+      <div class="sep-line"></div>
+    </div>
+
+    <div class="journey-card">
+      <div class="journey-header">
+        <div class="journey-header-title">Détails du voyage</div>
+        <div class="line-badge" id="line-badge">T1</div>
+      </div>
+      <div class="journey-body">
+        <div class="info-row"><div class="info-label">Station</div><div class="info-value" id="info-station">–</div></div>
+        <div class="info-row"><div class="info-label">Carte</div><div class="info-value mono" id="info-card">–</div></div>
+        <div class="info-row"><div class="info-label">Montant</div><div class="info-value amount-value" id="info-amount">–</div></div>
+        <div class="info-row"><div class="info-label">N° Ticket</div><div class="info-value mono" style="font-size:10px;word-break:break-all" id="info-ticketid">–</div></div>
+      </div>
+    </div>
+
+    <div class="security-footer">
+      <div class="sec-row"><span class="sec-icon">🛡️</span><span>Document sécurisé · Ne pas partager</span></div>
+      <div class="sec-row"><span class="sec-icon">🔒</span><span>QR code dynamique anti-fraude TOTP</span></div>
+      <div class="session-id" id="session-id-display">SESSION: –</div>
+    </div>
+  </div>
+</div>
+
+<script>
+let pageVisible = true;
+let ticketData = null;
+let ticketLoaded = false;
+let qrInstance = null;
+let rotateInterval = null;
+let tickerInterval = null;
+let totalTTL = 3600;
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { pageVisible = false; showScreen('hidden'); }
+  else { pageVisible = true; if (ticketLoaded) showScreen('ticket'); }
+});
+window.addEventListener('blur', () => { pageVisible = false; if (ticketLoaded) showScreen('hidden'); });
+window.addEventListener('focus', () => { pageVisible = true; if (ticketLoaded) showScreen('ticket'); });
+
+function drawWatermark(sessionId) {
+  const canvas = document.getElementById('wm-canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.font = '12px JetBrains Mono, monospace';
+  ctx.fillStyle = '#00d4ff';
+  const text = `TRAMWAY · ${sessionId} · JUSTIFICATIF OFFICIEL`;
+  for (let y = -canvas.height; y < canvas.height * 2; y += 80) {
+    for (let x = -canvas.width; x < canvas.width * 2; x += 300) {
+      ctx.save(); ctx.translate(x, y); ctx.rotate(-Math.PI / 8); ctx.fillText(text, 0, 0); ctx.restore();
+    }
+  }
+}
+window.addEventListener('resize', () => { if (ticketData) drawWatermark(ticketData.sessionId); });
+
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+  document.getElementById(`screen-${name}`).classList.remove('hidden');
+}
+function formatTime(seconds) {
+  const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+  const s = (seconds % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
+function formatDate(timestamp) {
+  return new Date(timestamp * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+function getToken() {
+  const parts = window.location.pathname.split('/');
+  return parts[parts.length - 1];
+}
+
+function renderQR(qrToken, sessionId) {
+  const wrap = document.getElementById('qrcode');
+  wrap.innerHTML = '';
+  const qrData = JSON.stringify({ t: qrToken, s: sessionId, ts: Math.floor(Date.now() / 1000) });
+  qrInstance = new QRCode(wrap, { text: qrData, width: 200, height: 200, colorDark: '#0d1f35', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+  document.getElementById('qr-watermark-text').textContent = sessionId.toUpperCase().repeat(5);
+}
+
+async function refreshQR() {
+  const token = getToken();
+  try {
+    const res = await fetch(`/api/qr-refresh/${token}`);
+    if (res.status === 410) { expire(); return; }
+    const data = await res.json();
+    if (data.expired) { expire(); return; }
+    renderQR(data.qrToken, ticketData.sessionId);
+    startRotateCountdown(data.nextRotationIn);
+  } catch(e) { console.warn('QR refresh failed', e); }
+}
+
+function startRotateCountdown(seconds) {
+  if (rotateInterval) clearInterval(rotateInterval);
+  let s = seconds;
+  document.getElementById('qr-rotate-timer').textContent = `${s}s`;
+  rotateInterval = setInterval(() => {
+    s--;
+    if (s <= 0) { clearInterval(rotateInterval); refreshQR(); }
+    else { document.getElementById('qr-rotate-timer').textContent = `${s}s`; }
+  }, 1000);
+}
+
+function startValidityTimer(remainingSeconds, expiresAt) {
+  if (tickerInterval) clearInterval(tickerInterval);
+  function tick() {
+    const now = Math.floor(Date.now() / 1000);
+    const remaining = expiresAt - now;
+    if (remaining <= 0) { expire(); return; }
+    const display = document.getElementById('timer-display');
+    const bar = document.getElementById('timer-bar');
+    display.textContent = formatTime(remaining);
+    display.className = 'timer-value';
+    if (remaining < 300) display.classList.add('warning');
+    if (remaining < 60) display.classList.add('danger');
+    const pct = (remaining / totalTTL) * 100;
+    bar.style.width = pct + '%';
+    if (remaining < 300) bar.style.background = 'linear-gradient(90deg, #cc7700, #f0a500)';
+    if (remaining < 60) bar.style.background = 'linear-gradient(90deg, #cc0000, #ff5252)';
+  }
+  tick();
+  tickerInterval = setInterval(tick, 1000);
+}
+
+function expire() {
+  clearInterval(rotateInterval); clearInterval(tickerInterval);
+  ticketLoaded = false; showScreen('expired');
+}
+
+async function loadTicket() {
+  const token = getToken();
+  if (!token || token === '') { showScreen('expired'); return; }
+  try {
+    const res = await fetch(`/api/ticket/${token}`);
+    if (res.status === 410 || res.status === 403 || res.status === 404) { showScreen('expired'); return; }
+    const data = await res.json();
+    if (data.error || data.expired) { showScreen('expired'); return; }
+    ticketData = data;
+    totalTTL = data.expiresAt - data.issuedAt;
+    document.getElementById('line-badge').textContent    = data.line;
+    document.getElementById('info-station').textContent  = data.station;
+    document.getElementById('info-card').textContent     = `•••• ${data.cardLast4}`;
+    document.getElementById('info-amount').textContent   = `${data.amount} €`;
+    document.getElementById('info-ticketid').textContent = data.ticketId;
+    document.getElementById('issued-time').textContent   = formatDate(data.issuedAt);
+    document.getElementById('session-id-display').textContent = `SESSION: ${data.sessionId.toUpperCase()}`;
+    renderQR(data.qrToken, data.sessionId);
+    drawWatermark(data.sessionId);
+    startValidityTimer(data.remainingSeconds, data.expiresAt);
+    startRotateCountdown(data.nextRotationIn);
+    ticketLoaded = true;
+    showScreen('ticket');
+  } catch(e) { console.error('Erreur:', e); showScreen('expired'); }
+}
+
+window.addEventListener('load', () => {
+  showScreen('loading');
+  setTimeout(loadTicket, 1200);
+});
+</script>
+</body>
+</html>
