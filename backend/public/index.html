@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a1628">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Justificatif de Voyage</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#06111f;--card:#112540;--accent:#00d4ff;--accent2:#0099cc;--gold:#f0a500;--green:#00e676;--red:#ff5252;--text:#e8f4fd;--muted:#5d7a96;--border:rgba(0,212,255,0.15);--radius:16px;--font-main:'Syne',sans-serif;--font-mono:'JetBrains Mono',monospace}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font-main);overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,212,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,0.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;z-index:10;transition:opacity 0.4s ease}
+.screen.hidden{opacity:0;pointer-events:none}
+#screen-loading{background:var(--bg);gap:24px}
+.loader-logo{font-size:14px;letter-spacing:4px;text-transform:uppercase;color:var(--accent);font-weight:700}
+.loader-bar{width:200px;height:2px;background:var(--border);border-radius:2px;overflow:hidden}
+.loader-bar-fill{height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:2px;animation:load 1.2s ease-in-out forwards}
+@keyframes load{from{width:0%}to{width:100%}}
+#screen-hidden{background:var(--bg);gap:20px;text-align:center}
+.hidden-icon{font-size:56px;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.95)}}
+.hidden-title{font-size:20px;font-weight:700;color:var(--gold)}
+.hidden-sub{font-size:14px;color:var(--muted);max-width:260px}
+#screen-expired{background:var(--bg);gap:20px;text-align:center}
+.expired-icon{font-size:56px}
+.expired-title{font-size:22px;font-weight:800;color:var(--red)}
+.expired-sub{font-size:14px;color:var(--muted);max-width:260px}
+#screen-ticket{justify-content:flex-start;padding:0;overflow-y:auto;background:var(--bg)}
+.ticket-wrapper{width:100%;max-width:420px;margin:0 auto;padding:20px 16px 40px;display:flex;flex-direction:column;gap:14px;position:relative}
+.top-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 4px}
+.logo-area{display:flex;align-items:center;gap:10px}
+.logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--accent2),var(--accent));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.logo-text{font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent)}
+.logo-sub{font-size:10px;color:var(--muted);margin-top:-2px}
+.valid-badge{display:flex;align-items:center;gap:6px;background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.3);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:600;color:var(--green);letter-spacing:1px}
+.valid-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:blink 1.5s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+.timer-banner{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;position:relative;overflow:hidden}
+.timer-label{font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+.timer-value{font-family:var(--font-mono);font-size:22px;font-weight:500;color:var(--accent);letter-spacing:2px}
+.timer-value.warning{color:var(--gold)}
+.timer-value.danger{color:var(--red);animation:shake 0.5s infinite}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-2px)}75%{transform:translateX(2px)}}
+.timer-bar-fill{height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:2px;transition:width 1s linear,background 1s}
+.qr-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;display:flex;flex-direction:column;align-items:center;gap:16px;position:relative;overflow:hidden}
+.qr-title{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:600}
+.qr-container{background:white;border-radius:12px;padding:16px;position:relative}
+.qr-watermark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0.08;font-family:var(--font-mono);font-size:9px;font-weight:700;color:#000;letter-spacing:1px;transform:rotate(-30deg);white-space:nowrap;overflow:hidden;border-radius:12px}
+.qr-rotate-info{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted)}
+.rotate-timer{font-family:var(--font-mono);font-size:13px;color:var(--accent);font-weight:500}
+.rotate-icon{animation:spin 30s linear infinite;display:inline-block}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.separator{display:flex;align-items:center;gap:12px}
+.sep-line{flex:1;height:1px;background:var(--border)}
+.sep-dots{display:flex;gap:4px}
+.sep-dot{width:5px;height:5px;border-radius:50%;background:var(--muted);opacity:0.4}
+.journey-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.journey-header{background:linear-gradient(135deg,rgba(0,153,204,0.2),rgba(0,212,255,0.05));border-bottom:1px solid var(--border);padding:14px 18px;display:flex;align-items:center;justify-content:space-between}
+.journey-header-title{font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent)}
+.line-badge{background:var(--accent);color:var(--bg);font-family:var(--font-mono);font-size:12px;font-weight:700;padding:3px 10px;border-radius:8px;letter-spacing:1px}
+.journey-body{padding:18px;display:flex;flex-direction:column;gap:12px}
+.info-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.info-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:2px;min-width:90px}
+.info-value{font-size:14px;font-weight:600;text-align:right;color:var(--text)}
+.info-value.mono{font-family:var(--font-mono);font-size:13px;letter-spacing:1px}
+.amount-value{font-size:20px;font-weight:800;color:var(--gold)}
+.security-footer{background:rgba(0,212,255,0.03);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;display:flex;flex-direction:column;gap:8px}
+.sec-row{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--muted)}
+.sec-icon{font-size:13px}
+.session-id{font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:1px;opacity:0.6}
+#global-watermark{position:fixed;inset:0;pointer-events:none;z-index:1000;overflow:hidden}
+#global-watermark canvas{width:100%;height:100%;opacity:0.04}
+@keyframes fadeSlideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.ticket-wrapper>*{animation:fadeSlideUp 0.5s ease both}
+.ticket-wrapper>*:nth-child(1){animation-delay:0.05s}
+.ticket-wrapper>*:nth-child(2){animation-delay:0.10s}
+.ticket-wrapper>*:nth-child(3){animation-delay:0.15s}
+.ticket-wrapper>*:nth-child(4){animation-delay:0.20s}
+.ticket-wrapper>*:nth-child(5){animation-delay:0.25s}
+.ticket-wrapper>*:nth-child(6){animation-delay:0.30s}
+</style>
+</head>
+<body>
+<div id="global-watermark"><canvas id="wm-canvas"></canvas></div>
+<div id="screen-loading" class="screen">
+<div class="loader-logo">🚋 Tramway</div>
+<div class="loader-bar"><div class="loader-bar-fill"></div></div>
+<div style="font-size:12px;color:var(--muted);letter-spacing:1px">Verification du justificatif...</div>
+</div>
+<div id="screen-hidden" class="screen hidden">
+<div class="hidden-icon">🔒</div>
+<div class="hidden-title">Contenu masque</div>
+<div class="hidden-sub">Revenez sur cet onglet pour afficher votre justificatif.</div>
+</div>
+<div id="screen-expired" class="screen hidden">
+<div class="expired-icon">⏰</div>
+<div class="expired-title">Justificatif expire</div>
+<div class="expired-sub">Ce justificatif n'est plus valide.</div>
+</div>
+<div id="screen-ticket" class="screen hidden">
+<div class="ticket-wrapper">
+<div class="top-header">
+<div class="logo-area">
+<div class="logo-icon">🚋</div>
+<div><div class="logo-text">Tramway</div><div class="logo-sub">Justificatif de voyage</div></div>
+</div>
+<div class="valid-badge"><div class="valid-dot"></div>VALIDE</div>
+</div>
+<div class="timer-banner">
+<div><div class="timer-label">Validite restante</div><div class="timer-value" id="timer-display">--:--</div></div>
+<div style="text-align:right"><div class="timer-label">Emis le</div><div style="font-family:var(--font-mono);font-size:13px;margin-top:4px" id="issued-time">--</div></div>
+<div style="position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,0.05);border-radius:0 0 16px 16px;overflow:hidden"><div class="timer-bar-fill" id="timer-bar" style="width:100%;height:100%"></div></div>
+</div>
+<div class="qr-card">
+<div class="qr-title">🔐 Code de validation securise</div>
+<div class="qr-container" id="qr-wrap">
+<div id="qrcode"></div>
+<div class="qr-watermark" id="qr-watermark-text"></div>
+</div>
+<div class="qr-rotate-info"><span class="rotate-icon">🔄</span><span>Renouvellement dans</span><span class="rotate-timer" id="qr-rotate-timer">--s</span></div>
+</div>
+<div class="separator"><div class="sep-line"></div><div class="sep-dots"><div class="sep-dot"></div><div class="sep-dot"></div><div class="sep-dot"></div></div><div class="sep-line"></div></div>
+<div class="journey-card">
+<div class="journey-header"><div class="journey-header-title">Details du voyage</div><div class="line-badge" id="line-badge">T1</div></div>
+<div class="journey-body">
+<div class="info-row"><div class="info-label">Station</div><div class="info-value" id="info-station">-</div></div>
+<div class="info-row"><div class="info-label">Carte</div><div class="info-value mono" id="info-card">-</div></div>
+<div class="info-row"><div class="info-label">Montant</div><div class="info-value amount-value" id="info-amount">-</div></div>
+<div class="info-row"><div class="info-label">N Ticket</div><div class="info-value mono" style="font-size:10px;word-break:break-all" id="info-ticketid">-</div></div>
+</div>
+</div>
+<div class="security-footer">
+<div class="sec-row"><span class="sec-icon">🛡️</span><span>Document securise - Ne pas partager</span></div>
+<div class="sec-row"><span class="sec-icon">🔒</span><span>QR code dynamique anti-fraude TOTP</span></div>
+<div class="session-id" id="session-id-display">SESSION: -</div>
+</div>
+</div>
+</div>
+<script>
+var pageVisible=true,ticketData=null,ticketLoaded=false,rotateInterval=null,tickerInterval=null,totalTTL=3600;
+document.addEventListener('visibilitychange',function(){if(document.hidden){pageVisible=false;showScreen('hidden')}else{pageVisible=true;if(ticketLoaded)showScreen('ticket')}});
+window.addEventListener('blur',function(){pageVisible=false;if(ticketLoaded)showScreen('hidden')});
+window.addEventListener('focus',function(){pageVisible=true;if(ticketLoaded)showScreen('ticket')});
+function drawWatermark(s){var c=document.getElementById('wm-canvas'),ctx=c.getContext('2d');c.width=window.innerWidth;c.height=window.innerHeight;ctx.font='12px monospace';ctx.fillStyle='#00d4ff';var t='TRAMWAY '+s+' JUSTIFICATIF';for(var y=-c.height;y<c.height*2;y+=80){for(var x=-c.width;x<c.width*2;x+=300){ctx.save();ctx.translate(x,y);ctx.rotate(-Math.PI/8);ctx.fillText(t,0,0);ctx.restore()}}}
+window.addEventListener('resize',function(){if(ticketData)drawWatermark(ticketData.sessionId)});
+function showScreen(n){document.querySelectorAll('.screen').forEach(function(s){s.classList.add('hidden')});document.getElementById('screen-'+n).classList.remove('hidden')}
+function formatTime(s){var m=Math.floor(s/60).toString().padStart(2,'0'),sec=(s%60).toString().padStart(2,'0');return m+':'+sec}
+function formatDate(t){return new Date(t*1000).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}
+function getToken(){var p=window.location.pathname.split('/');return p[p.length-1]}
+function renderQR(t,s){var w=document.getElementById('qrcode');w.innerHTML='';new QRCode(w,{text:JSON.stringify({t:t,s:s,ts:Math.floor(Date.now()/1000)}),width:200,height:200,colorDark:'#0d1f35',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});document.getElementById('qr-watermark-text').textContent=s.toUpperCase().repeat(5)}
+function refreshQR(){var token=getToken();fetch('/api/qr-refresh/'+token).then(function(r){if(r.status===410){expire();return}return r.json()}).then(function(d){if(!d||d.expired){expire();return}renderQR(d.qrToken,ticketData.sessionId);startRotateCountdown(d.nextRotationIn)}).catch(function(e){console.warn(e)})}
+function startRotateCountdown(s){if(rotateInterval)clearInterval(rotateInterval);var sec=s;document.getElementById('qr-rotate-timer').textContent=sec+'s';rotateInterval=setInterval(function(){sec--;if(sec<=0){clearInterval(rotateInterval);refreshQR()}else{document.getElementById('qr-rotate-timer').textContent=sec+'s'}},1000)}
+function startValidityTimer(r,exp){if(tickerInterval)clearInterval(tickerInterval);function tick(){var now=Math.floor(Date.now()/1000),rem=exp-now;if(rem<=0){expire();return}var d=document.getElementById('timer-display'),b=document.getElementById('timer-bar');d.textContent=formatTime(rem);d.className='timer-value';if(rem<300)d.classList.add('warning');if(rem<60)d.classList.add('danger');b.style.width=(rem/totalTTL*100)+'%'}tick();tickerInterval=setInterval(tick,1000)}
+function expire(){clearInterval(rotateInterval);clearInterval(tickerInterval);ticketLoaded=false;showScreen('expired')}
+function loadTicket(){var token=getToken();if(!token||token===''){showScreen('expired');return}fetch('/api/ticket/'+token).then(function(r){if(r.status===410||r.status===403||r.status===404){showScreen('expired');return null}return r.json()}).then(function(d){if(!d||d.error||d.expired){showScreen('expired');return}ticketData=d;totalTTL=d.expiresAt-d.issuedAt;document.getElementById('line-badge').textContent=d.line;document.getElementById('info-station').textContent=d.station;document.getElementById('info-card').textContent='.... '+d.cardLast4;document.getElementById('info-amount').textContent=d.amount+' EUR';document.getElementById('info-ticketid').textContent=d.ticketId;document.getElementById('issued-time').textContent=formatDate(d.issuedAt);document.getElementById('session-id-display').textContent='SESSION: '+d.sessionId.toUpperCase();renderQR(d.qrToken,d.sessionId);drawWatermark(d.sessionId);startValidityTimer(d.remainingSeconds,d.expiresAt);startRotateCountdown(d.nextRotationIn);ticketLoaded=true;showScreen('ticket')}).catch(function(e){console.error(e);showScreen('expired')})}
+window.addEventListener('load',function(){showScreen('loading');setTimeout(loadTicket,1200)});
+</script>
+</body>
+</html>
