@@ -4,7 +4,6 @@ const path = require('path');
 const app = express();
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '../frontend/public')));
 
 const SECRET_KEY = process.env.SECRET_KEY || 'tramway_secret_pfe_2024';
 const QR_INTERVAL = 30;
@@ -35,6 +34,10 @@ function secondsUntilNextRotation() {
   var now = Math.floor(Date.now() / 1000);
   return QR_INTERVAL - (now % QR_INTERVAL);
 }
+
+app.get('/', function(req, res) {
+  res.send('Serveur tram-pwa actif');
+});
 
 app.post('/api/validate', function(req, res) {
   var body = req.body;
@@ -135,7 +138,6 @@ app.get('/api/qr-refresh/:token', function(req, res) {
 app.get('/ticket/:token', function(req, res) {
   res.sendFile(path.join(__dirname, '../frontend/public/index.html'));
 });
-
 
 var PORT = process.env.PORT || 3000;
 app.listen(PORT, function() {
