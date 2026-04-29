@@ -1,181 +1,143 @@
-/**
-
-- Backend - Justificatif de voyage Tramway
-- Sécurité : TOTP-like QR rotation + JWT + expiration 60min
-  */
-
-const express = require(‘express’);
-const crypto = require(‘crypto’);
-const path = require(‘path’);
+const express = require('express');
+const crypto = require('crypto');
+const path = require('path');
 const app = express();
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, ‘../frontend/public’)));
+app.use(express.static(path.join(__dirname, '../frontend/public')));
 
-// ─── CONFIG ────────────────────────────────────────────────────────────────
-const SECRET_KEY = process.env.SECRET_KEY || ‘tramway_secret_key_2024_billettique’;
-const QR_INTERVAL = 30;     // secondes
-const TICKET_TTL = 60 * 60; // 60 minutes en secondes
+const SECRET_KEY = process.env.SECRET_KEY || 'tramway_secret_pfe_2024';
+const QR_INTERVAL = 30;
+const TICKET_TTL = 60 * 60;
 
-// ─── STOCKAGE EN MÉMOIRE (remplacer par Redis/DB en prod) ─────────────────
 const activeTickets = new Map();
 
-// ─── HELPERS ───────────────────────────────────────────────────────────────
 function generateTicketId() {
-return crypto.randomBytes(16).toString(‘hex’);
+  return crypto.randomBytes(16).toString('hex');
 }
 
-function hmacSign(data, key = SECRET_KEY) {
-return crypto.createHmac(‘sha256’, key).update(data).digest(‘hex’);
+function hmacSign(data, key) {
+  key = key || SECRET_KEY;
+  return crypto.createHmac('sha256', key).update(data).digest('hex');
 }
 
-/**
-
-- TOTP-like : génère un token qui change toutes les 30s
-- basé sur ticketId + tranche de temps
-  */
-  function generateTOTP(ticketId, timeStep = null) {
-  const step = timeStep ?? Math.floor(Date.now() / 1000 / QR_INTERVAL);
-  const payload = `${ticketId}:${step}`;
-  return hmacSign(payload).substring(0, 32); // 32 chars hex
-  }
+function generateTOTP(ticketId, timeStep) {
+  var step = timeStep !== undefined ? timeStep : Math.floor(Date.now() / 1000 / QR_INTERVAL);
+  var payload = ticketId + ':' + step;
+  return hmacSign(payload).substring(0, 32);
+}
 
 function getCurrentTimeStep() {
-return Math.floor(Date.now() / 1000 / QR_INTERVAL);
+  return Math.floor(Date.now() / 1000 / QR_INTERVAL);
 }
 
 function secondsUntilNextRotation() {
-const now = Math.floor(Date.now() / 1000);
-return QR_INTERVAL - (now % QR_INTERVAL);
+  var now = Math.floor(Date.now() / 1000);
+  return QR_INTERVAL - (now % QR_INTERVAL);
 }
 
-// ─── ROUTES API ────────────────────────────────────────────────────────────
+app.post('/api/validate', function(req, res) {
+  var body = req.body;
+  var cardLast4 = body.cardLast4 || '****';
+  var amount = body.amount || '1.80';
+  var line = body.line || 'T1';
+  var station = body.station || 'Centre-Ville';
 
-/**
+  var ticketId = generateTicketId();
+  var issuedAt = Math.floor(Date.now() / 1000);
+  var expiresAt = issuedAt + TICKET_TTL;
+  var sessionId = crypto.randomBytes(8).toString('hex');
 
-- POST /api/validate
-- Simule la validation EMV par le VPE412
-- Body: { cardLast4, amount, line, station }
-  */
-  app.post(’/api/validate’, (req, res) => {
-  const { cardLast4 = ’****’, amount = ‘1.80’, line = ‘T1’, station = ‘Centre-Ville’ } = req.body;
+  var ticketData = {
+    ticketId: ticketId,
+    cardLast4: cardLast4,
+    amount: amount,
+    line: line,
+    station: station,
+    issuedAt: issuedAt,
+    expiresAt: expiresAt,
+    sessionId: sessionId
+  };
 
-const ticketId = generateTicketId();
-const issuedAt = Math.floor(Date.now() / 1000);
-const expiresAt = issuedAt + TICKET_TTL;
+  activeTickets.set(ticketId, ticketData);
+  setTimeout(function() { activeTickets.delete(ticketId); }, TICKET_TTL * 1000);
 
-const ticketData = {
-ticketId,
-cardLast4: String(cardLast4).replace(/\d(?=\d{4})/g, ‘*’), // masque sauf 4 derniers
-amount,
-line,
-station,
-issuedAt,
-expiresAt,
-sessionId: crypto.randomBytes(8).toString(‘hex’),
-};
+  var payload = JSON.stringify({ ticketId: ticketId, exp: expiresAt, sig: hmacSign(ticketId + ':' + expiresAt) });
+  var accessToken = Buffer.from(payload).toString('base64');
 
-activeTickets.set(ticketId, ticketData);
-
-// Nettoyage auto après expiration
-setTimeout(() => activeTickets.delete(ticketId), TICKET_TTL * 1000);
-
-// Token d’accès signé
-const accessToken = Buffer.from(JSON.stringify({
-ticketId,
-exp: expiresAt,
-sig: hmacSign(`${ticketId}:${expiresAt}`)
-})).toString(‘base64url’);
-
-res.json({
-success: true,
-accessToken,
-ticketUrl: `/ticket/${accessToken}`,
-expiresAt,
-ttlMinutes: TICKET_TTL / 60
-});
-});
-
-/**
-
-- GET /api/ticket/:token
-- Retourne les données du ticket si valide
-  */
-  app.get(’/api/ticket/:token’, (req, res) => {
-  try {
-  const raw = Buffer.from(req.params.token, ‘base64url’).toString(‘utf8’);
-  const { ticketId, exp, sig } = JSON.parse(raw);
-  
-  // Vérif signature
-  const expectedSig = hmacSign(`${ticketId}:${exp}`);
-  if (sig !== expectedSig) return res.status(403).json({ error: ‘Token invalide’ });
-  
-  // Vérif expiration
-  const now = Math.floor(Date.now() / 1000);
-  if (now > exp) return res.status(410).json({ error: ‘Justificatif expiré’, expired: true });
-  
-  const ticket = activeTickets.get(ticketId);
-  if (!ticket) return res.status(404).json({ error: ‘Ticket introuvable’ });
-  
-  const timeStep = getCurrentTimeStep();
-  const qrToken = generateTOTP(ticketId, timeStep);
-  const nextRotation = secondsUntilNextRotation();
-  
   res.json({
-  …ticket,
-  qrToken,           // token TOTP actuel pour le QR
-  nextRotationIn: nextRotation,
-  remainingSeconds: exp - now,
+    success: true,
+    accessToken: accessToken,
+    ticketUrl: '/ticket/' + accessToken,
+    expiresAt: expiresAt,
+    ttlMinutes: 60
   });
-
-} catch (e) {
-res.status(400).json({ error: ‘Token malformé’ });
-}
 });
 
-/**
-
-- GET /api/qr-refresh/:token
-- Endpoint léger pour récupérer uniquement le nouveau QR token
-  */
-  app.get(’/api/qr-refresh/:token’, (req, res) => {
+app.get('/api/ticket/:token', function(req, res) {
   try {
-  const raw = Buffer.from(req.params.token, ‘base64url’).toString(‘utf8’);
-  const { ticketId, exp, sig } = JSON.parse(raw);
-  
-  const expectedSig = hmacSign(`${ticketId}:${exp}`);
-  if (sig !== expectedSig) return res.status(403).json({ error: ‘Invalide’ });
-  
-  const now = Math.floor(Date.now() / 1000);
-  if (now > exp) return res.status(410).json({ error: ‘Expiré’, expired: true });
-  
-  const qrToken = generateTOTP(ticketId);
-  const nextRotation = secondsUntilNextRotation();
-  
-  res.json({
-  qrToken,
-  nextRotationIn: nextRotation,
-  remainingSeconds: exp - now,
-  });
+    var raw = Buffer.from(req.params.token, 'base64').toString('utf8');
+    var parsed = JSON.parse(raw);
+    var ticketId = parsed.ticketId;
+    var exp = parsed.exp;
+    var sig = parsed.sig;
 
-} catch (e) {
-res.status(400).json({ error: ‘Erreur’ });
-}
+    var expectedSig = hmacSign(ticketId + ':' + exp);
+    if (sig !== expectedSig) return res.status(403).json({ error: 'Token invalide' });
+
+    var now = Math.floor(Date.now() / 1000);
+    if (now > exp) return res.status(410).json({ error: 'Expire', expired: true });
+
+    var ticket = activeTickets.get(ticketId);
+    if (!ticket) return res.status(404).json({ error: 'Ticket introuvable' });
+
+    var qrToken = generateTOTP(ticketId, getCurrentTimeStep());
+    var nextRotation = secondsUntilNextRotation();
+
+    var result = Object.assign({}, ticket);
+    result.qrToken = qrToken;
+    result.nextRotationIn = nextRotation;
+    result.remainingSeconds = exp - now;
+
+    res.json(result);
+  } catch(e) {
+    res.status(400).json({ error: 'Token malforme' });
+  }
 });
 
-/**
+app.get('/api/qr-refresh/:token', function(req, res) {
+  try {
+    var raw = Buffer.from(req.params.token, 'base64').toString('utf8');
+    var parsed = JSON.parse(raw);
+    var ticketId = parsed.ticketId;
+    var exp = parsed.exp;
+    var sig = parsed.sig;
 
-- GET /ticket/:token → sert le frontend SPA
-  */
-  app.get(’/ticket/:token’, (req, res) => {
-  res.sendFile(path.join(__dirname, ‘../frontend/public/index.html’));
-  });
+    var expectedSig = hmacSign(ticketId + ':' + exp);
+    if (sig !== expectedSig) return res.status(403).json({ error: 'Invalide' });
 
-// ─── DÉMARRAGE ─────────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-console.log(`✅ Serveur démarré sur http://localhost:${PORT}`);
-console.log(`📋 Test : POST /api/validate avec { cardLast4, amount, line, station }`);
+    var now = Math.floor(Date.now() / 1000);
+    if (now > exp) return res.status(410).json({ error: 'Expire', expired: true });
+
+    var qrToken = generateTOTP(ticketId);
+    var nextRotation = secondsUntilNextRotation();
+
+    res.json({
+      qrToken: qrToken,
+      nextRotationIn: nextRotation,
+      remainingSeconds: exp - now
+    });
+  } catch(e) {
+    res.status(400).json({ error: 'Erreur' });
+  }
 });
 
-module.exports = app;
+app.get('/ticket/:token', function(req, res) {
+  res.sendFile(path.join(__dirname, '../frontend/public/index.html'));
+});
+
+
+var PORT = process.env.PORT || 3000;
+app.listen(PORT, function() {
+  console.log('Serveur demarre sur port ' + PORT);
+});
