@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tramway - Billettique</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#06111f;color:#e8f4fd;font-family:Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.container{width:100%;max-width:420px;text-align:center}
+.logo-icon{font-size:72px;margin-bottom:16px}
+.title{font-size:28px;font-weight:700;color:#00d4ff;letter-spacing:3px;margin-bottom:8px}
+.subtitle{font-size:14px;color:#5d7a96;margin-bottom:40px;line-height:1.6}
+.btn{display:block;width:100%;padding:16px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;text-decoration:none;margin-bottom:12px;letter-spacing:1px;border:none}
+.btn-primary{background:linear-gradient(135deg,#0099cc,#00d4ff);color:#06111f}
+.btn-secondary{background:transparent;border:1px solid rgba(0,212,255,0.3);color:#00d4ff}
+.features{display:flex;flex-direction:column;gap:10px;margin-top:32px}
+.feature{background:#112540;border:1px solid rgba(0,212,255,0.1);border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:14px;text-align:left}
+.feature-icon{font-size:24px}
+.feature-title{font-size:13px;font-weight:600;color:#e8f4fd}
+.feature-sub{font-size:11px;color:#5d7a96;margin-top:2px}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="logo-icon">🚋</div>
+  <div class="title">TRAMWAY</div>
+  <div class="subtitle">Système de billettique numérique sécurisé<br>Justificatif de voyage avec QR code dynamique</div>
+
+  <a href="/register" class="btn btn-primary">Créer un compte</a>
+  <a href="/login" class="btn btn-secondary">Se connecter</a>
+
+  <div class="features">
+    <div class="feature">
+      <div class="feature-icon">🔐</div>
+      <div>
+        <div class="feature-title">QR Code Dynamique</div>
+        <div class="feature-sub">Change toutes les 15 secondes — anti-fraude</div>
+      </div>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">⏱️</div>
+      <div>
+        <div class="feature-title">Validité 1 heure</div>
+        <div class="feature-sub">Justificatif valide 60 minutes après validation</div>
+      </div>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">💳</div>
+      <div>
+        <div class="feature-title">Paiement EMV</div>
+        <div class="feature-sub">Compatible carte bancaire NFC/Chip</div>
+      </div>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🛡️</div>
+      <div>
+        <div class="feature-title">Sécurité TOTP</div>
+        <div class="feature-sub">Token signé HMAC-SHA256</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
