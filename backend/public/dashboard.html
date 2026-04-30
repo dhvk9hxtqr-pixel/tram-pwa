@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mon Espace - Tramway</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#06111f;color:#e8f4fd;font-family:Arial,sans-serif;min-height:100vh;padding:20px}
+.header{display:flex;align-items:center;justify-content:space-between;padding:16px 0;margin-bottom:24px;border-bottom:1px solid rgba(0,212,255,0.15)}
+.header-logo{font-size:20px;font-weight:700;color:#00d4ff;letter-spacing:2px}
+.logout-btn{background:rgba(255,82,82,0.1);border:1px solid rgba(255,82,82,0.3);color:#ff5252;padding:8px 16px;border-radius:8px;font-size:12px;cursor:pointer}
+.welcome{background:#112540;border:1px solid rgba(0,212,255,0.15);border-radius:16px;padding:20px;margin-bottom:16px}
+.welcome-name{font-size:20px;font-weight:700;color:#00d4ff}
+.welcome-sub{font-size:13px;color:#5d7a96;margin-top:4px}
+.card-info{display:flex;align-items:center;gap:10px;margin-top:14px;background:#0d1f35;border-radius:10px;padding:12px 16px}
+.card-icon{font-size:24px}
+.card-num{font-family:monospace;font-size:14px;letter-spacing:2px;color:#e8f4fd}
+.card-label{font-size:11px;color:#5d7a96}
+.section-title{font-size:12px;color:#5d7a96;letter-spacing:2px;text-transform:uppercase;margin:20px 0 12px}
+.info-box{background:#112540;border:1px solid rgba(0,212,255,0.15);border-radius:16px;padding:20px;text-align:center}
+.info-icon{font-size:40px;margin-bottom:12px}
+.info-text{font-size:14px;color:#5d7a96}
+.info-text b{color:#00d4ff}
+.status-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.3);border-radius:20px;padding:6px 14px;font-size:12px;color:#00e676;margin-top:12px}
+.dot{width:6px;height:6px;border-radius:50%;background:#00e676;animation:blink 1.5s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo">🚋 TRAMWAY</div>
+  <button class="logout-btn" onclick="logout()">Déconnexion</button>
+</div>
+
+<div class="welcome">
+  <div class="welcome-name">Bonjour, <span id="user-name">--</span> 👋</div>
+  <div class="welcome-sub">Votre espace personnel tramway</div>
+  <div class="card-info">
+    <div class="card-icon">💳</div>
+    <div>
+      <div class="card-label">Carte enregistrée</div>
+      <div class="card-num">•••• •••• •••• <span id="card-last4">----</span></div>
+    </div>
+  </div>
+  <div style="text-align:center">
+    <div class="status-badge"><div class="dot"></div>Carte active</div>
+  </div>
+</div>
+
+<div class="section-title">Comment ça marche ?</div>
+
+<div class="info-box">
+  <div class="info-icon">🚋</div>
+  <div class="info-text">
+    Payez avec votre carte bancaire dans le <b>valideur tramway</b>
+    <br><br>
+    Un <b>QR code sécurisé</b> sera généré automatiquement
+    <br><br>
+    Montrez-le au <b>contrôleur</b> — valide pendant <b>1 heure</b>
+    <br><br>
+    Le QR change toutes les <b>15 secondes</b> anti-fraude 🔐
+  </div>
+</div>
+
+<script>
+window.addEventListener('load', function() {
+  var token = localStorage.getItem('tramToken');
+  var name = localStorage.getItem('tramName');
+  var card = localStorage.getItem('tramCard');
+
+  if (!token) {
+    window.location.href = '/login';
+    return;
+  }
+
+  document.getElementById('user-name').textContent = name || 'Usager';
+  document.getElementById('card-last4').textContent = card || '----';
+});
+
+function logout() {
+  localStorage.removeItem('tramToken');
+  localStorage.removeItem('tramName');
+  localStorage.removeItem('tramCard');
+  window.location.href = '/login';
+}
+</script>
+</body>
+</html>
