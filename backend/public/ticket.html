@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Justificatif - Tramway</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#06111f;--card:#112540;--accent:#00d4ff;--gold:#f0a500;--green:#00e676;--red:#ff5252;--text:#e8f4fd;--muted:#5d7a96;--border:rgba(0,212,255,0.15)}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:Arial,sans-serif;overflow-x:hidden}
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;z-index:10;transition:opacity 0.4s}
+.screen.hidden{opacity:0;pointer-events:none}
+#screen-loading{background:var(--bg);gap:20px;text-align:center}
+.loader-icon{font-size:48px;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(0.9)}}
+#screen-hidden{background:var(--bg);gap:20px;text-align:center}
+#screen-expired{background:var(--bg);gap:20px;text-align:center}
+.exp-icon{font-size:56px}
+.exp-title{font-size:22px;font-weight:700;color:var(--red)}
+.exp-sub{font-size:14px;color:var(--muted);max-width:260px}
+#screen-ticket{justify-content:flex-start;padding:0;overflow-y:auto;background:var(--bg)}
+.ticket-wrapper{width:100%;max-width:420px;margin:0 auto;padding:20px 16px 40px;display:flex;flex-direction:column;gap:14px}
+.top-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 4px}
+.logo-area{display:flex;align-items:center;gap:10px}
+.logo-icon{width:36px;height:36px;background:linear-gradient(135deg,#0099cc,#00d4ff);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.logo-text{font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent)}
+.logo-sub{font-size:10px;color:var(--muted)}
+.valid-badge{display:flex;align-items:center;gap:6px;background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.3);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:var(--green)}
+.valid-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:blink 1.5s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+.timer-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;position:relative;overflow:hidden}
+.timer-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+.timer-value{font-family:monospace;font-size:22px;font-weight:700;color:var(--accent);letter-spacing:2px}
+.timer-value.warn{color:var(--gold)}
+.timer-value.danger{color:var(--red)}
+.timer-bar{position:absolute;bottom:0;left:0;height:3px;background:linear-gradient(90deg,#0099cc,#00d4ff);transition:width 1s linear}
+.qr-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.qr-title{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:600}
+.qr-box{background:white;border-radius:12px;padding:16px}
+.qr-rotate{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted)}
+.rotate-count{font-family:monospace;font-size:13px;color:var(--accent);font-weight:700}
+.rotate-icon{animation:spin 15s linear infinite;display:inline-block}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.journey-card{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.journey-head{background:linear-gradient(135deg,rgba(0,153,204,0.2),rgba(0,212,255,0.05));border-bottom:1px solid var(--border);padding:14px 18px;display:flex;justify-content:space-between;align-items:center}
+.journey-title{font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent)}
+.line-badge{background:var(--accent);color:var(--bg);font-family:monospace;font-size:12px;font-weight:700;padding:3px 10px;border-radius:8px}
+.journey-body{padding:18px;display:flex;flex-direction:column;gap:12px}
+.info-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.info-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;min-width:80px}
+.info-val{font-size:14px;font-weight:600;text-align:right;color:var(--text)}
+.amount-val{font-size:20px;font-weight:800;color:var(--gold)}
+.sec-footer{background:rgba(0,212,255,0.03);border:1px solid var(--border);border-radius:16px;padding:14px 18px;display:flex;flex-direction:column;gap:8px}
+.sec-row{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--muted)}
+.session-id{font-family:monospace;font-size:10px;color:var(--muted);opacity:0.6}
+#wm{position:fixed;inset:0;pointer-events:none;z-index:1000;overflow:hidden}
+#wm canvas{width:100%;height:100%;opacity:0.04}
+</style>
+</head>
+<body>
+<div id="wm"><canvas id="wm-c"></canvas></div>
+
+<div id="screen-loading" class="screen">
+  <div class="loader-icon">🚋</div>
+  <div style="font-size:14px;color:#5d7a96">Chargement du justificatif...</div>
+</div>
+
+<div id="screen-hidden" class="screen hidden">
+  <div style="font-size:56px">🔒</div>
+  <div style="font-size:20px;font-weight:700;color:#f0a500">Contenu masqué</div>
+  <div style="font-size:14px;color:#5d7a96;text-align:center;max-width:260px">Revenez sur cet onglet pour afficher votre justificatif</div>
+</div>
+
+<div id="screen-expired" class="screen hidden">
+  <div class="exp-icon">⏰</div>
+  <div class="exp-title">Justificatif expiré</div>
+  <div class="exp-sub">Ce justificatif n'est plus valide. La durée de 60 minutes est dépassée.</div>
+</div>
+
+<div id="screen-ticket" class="screen hidden">
+  <div class="ticket-wrapper">
+    <div class="top-header">
+      <div class="logo-area">
+        <div class="logo-icon">🚋</div>
+        <div><div class="logo-text">Tramway</div><div class="logo-sub">Justificatif de voyage</div></div>
+      </div>
+      <div class="valid-badge"><div class="valid-dot"></div>VALIDE</div>
+    </div>
+
+    <div class="timer-card">
+      <div>
+        <div class="timer-label">Validité restante</div>
+        <div class="timer-value" id="timer">--:--</div>
+      </div>
+      <div style="text-align:right">
+        <div class="timer-label">Émis le</div>
+        <div style="font-family:monospace;font-size:13px;margin-top:4px" id="issued">--</div>
+      </div>
+      <div class="timer-bar" id="timer-bar" style="width:100%"></div>
+    </div>
+
+    <div class="qr-card">
+      <div class="qr-title">🔐 Code de validation sécurisé</div>
+      <div class="qr-box"><div id="qrcode"></div></div>
+      <div class="qr-rotate">
+        <span class="rotate-icon">🔄</span>
+        <span>Renouvellement dans</span>
+        <span class="rotate-count" id="qr-timer">--s</span>
+      </div>
+    </div>
+
+    <div class="journey-card">
+      <div class="journey-head">
+        <div class="journey-title">Détails du voyage</div>
+        <div class="line-badge" id="line">T1</div>
+      </div>
+      <div class="journey-body">
+        <div class="info-row"><div class="info-label">Passager</div><div class="info-val" id="pname">-</div></div>
+        <div class="info-row"><div class="info-label">Station</div><div class="info-val" id="station">-</div></div>
+        <div class="info-row"><div class="info-label">Carte</div><div class="info-val" style="font-family:monospace" id="card">-</div></div>
+        <div class="info-row"><div class="info-label">Montant</div><div class="info-val amount-val" id="amount">-</div></div>
+      </div>
+    </div>
+
+    <div class="sec-footer">
+      <div class="sec-row"><span>🛡️</span><span>Document sécurisé · Ne pas partager</span></div>
+      <div class="sec-row"><span>🔒</span><span>QR dynamique anti-fraude TOTP</span></div>
+      <div class="session-id" id="sid">SESSION: -</div>
+    </div>
+  </div>
+</div>
+
+<script>
+var ticketData=null,ticketLoaded=false,rotateInterval=null,tickerInterval=null,totalTTL=3600;
+
+document.addEventListener('visibilitychange',function(){
+  if(document.hidden){if(ticketLoaded)showScreen('hidden')}
+  else{if(ticketLoaded)showScreen('ticket')}
+});
+window.addEventListener('blur',function(){if(ticketLoaded)showScreen('hidden')});
+window.addEventListener('focus',function(){if(ticketLoaded)showScreen('ticket')});
+
+function drawWM(s){
+  var c=document.getElementById('wm-c'),ctx=c.getContext('2d');
+  c.width=window.innerWidth;c.height=window.innerHeight;
+  ctx.font='12px monospace';ctx.fillStyle='#00d4ff';
+  var t='TRAMWAY '+s+' JUSTIFICATIF OFFICIEL';
+  for(var y=-c.height;y<c.height*2;y+=80){
+    for(var x=-c.width;x<c.width*2;x+=300){
+      ctx.save();ctx.translate(x,y);ctx.rotate(-Math.PI/8);ctx.fillText(t,0,0);ctx.restore();
+    }
+  }
+}
+
+function showScreen(n){
+  document.querySelectorAll('.screen').forEach(function(s){s.classList.add('hidden')});
+  document.getElementById('screen-'+n).classList.remove('hidden');
+}
+
+function fmt(s){
+  var m=Math.floor(s/60).toString().padStart(2,'0');
+  return m+':'+(s%60).toString().padStart(2,'0');
+}
+
+function getToken(){
+  var p=window.location.pathname.split('/');
+  return p[p.length-1];
+}
+
+function renderQR(t,s){
+  document.getElementById('qrcode').innerHTML='';
+  new QRCode(document.getElementById('qrcode'),{
+    text:JSON.stringify({t:t,s:s,ts:Math.floor(Date.now()/1000)}),
+    width:200,height:200,colorDark:'#0d1f35',colorLight:'#ffffff',
+    correctLevel:QRCode.CorrectLevel.M
+  });
+}
+
+function refreshQR(){
+  var token=getToken();
+  fetch('/api/qr-refresh/'+token).then(function(r){
+    if(r.status===410){expire();return null}
+    return r.json();
+  }).then(function(d){
+    if(!d||d.expired){expire();return}
+    renderQR(d.qrToken,ticketData.sessionId);
+    startQRCountdown(d.nextRotationIn);
+  }).catch(function(){});
+}
+
+function startQRCountdown(s){
+  if(rotateInterval)clearInterval(rotateInterval);
+  var sec=s;
+  document.getElementById('qr-timer').textContent=sec+'s';
+  rotateInterval=setInterval(function(){
+    sec--;
+    if(sec<=0){clearInterval(rotateInterval);refreshQR();}
+    else document.getElementById('qr-timer').textContent=sec+'s';
+  },1000);
+}
+
+function startTimer(exp){
+  if(tickerInterval)clearInterval(tickerInterval);
+  function tick(){
+    var now=Math.floor(Date.now()/1000),rem=exp-now;
+    if(rem<=0){expire();return}
+    var el=document.getElementById('timer');
+    el.textContent=fmt(rem);
+    el.className='timer-value'+(rem<300?' warn':'')+(rem<60?' danger':'');
+    document.getElementById('timer-bar').style.width=(rem/totalTTL*100)+'%';
+  }
+  tick();tickerInterval=setInterval(tick,1000);
+}
+
+function expire(){
+  clearInterval(rotateInterval);clearInterval(tickerInterval);
+  ticketLoaded=false;showScreen('expired');
+}
+
+function loadTicket(){
+  var token=getToken();
+  if(!token||token===''){showScreen('expired');return}
+  fetch('/api/ticket/'+token).then(function(r){
+    if(r.status===410||r.status===403||r.status===404){showScreen('expired');return null}
+    return r.json();
+  }).then(function(d){
+    if(!d||d.error||d.expired){showScreen('expired');return}
+    ticketData=d;
+    totalTTL=d.expiresAt-d.issuedAt;
+    document.getElementById('line').textContent=d.line;
+    document.getElementById('pname').textContent=d.name||d.ownerName||'-';
+    document.getElementById('station').textContent=d.station;
+    document.getElementById('card').textContent='•••• '+d.cardLast4;
+    document.getElementById('amount').textContent=d.amount+' MAD';
+    document.getElementById('issued').textContent=new Date(d.issuedAt*1000).toLocaleTimeString('fr-FR');
+    document.getElementById('sid').textContent='SESSION: '+d.sessionId.toUpperCase();
+    renderQR(d.qrToken,d.sessionId);
+    drawWM(d.sessionId);
+    startTimer(d.expiresAt);
+    startQRCountdown(d.nextRotationIn);
+    ticketLoaded=true;
+    showScreen('ticket');
+  }).catch(function(){showScreen('expired')});
+}
+
+window.addEventListener('load',function(){
+  showScreen('loading');
+  setTimeout(loadTicket,1200);
+});
+window.addEventListener('resize',function(){if(ticketData)drawWM(ticketData.sessionId)});
+</script>
+</body>
+</html>
