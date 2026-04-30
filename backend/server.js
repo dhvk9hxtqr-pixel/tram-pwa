@@ -8,13 +8,15 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 const SECRET_KEY = process.env.SECRET_KEY || 'tramway_secret_pfe_2024';
-const ADMIN_KEY = process.env.ADMIN_KEY || 'admin_tram_2024';
 const QR_INTERVAL = 15;
 const TICKET_TTL = 60 * 60;
-const DB_FILE = path.join(__dirname, 'users.json');
+const DB_FILE = path.join(__dirname, 'db.json');
 
+// ── DATABASE ──
 function readDB() {
-  if (!fs.existsSync(DB_FILE)) fs.writeFileSync(DB_FILE, JSON.stringify({ cards: [] }));
+  if (!fs.existsSync(DB_FILE)) {
+    fs.writeFileSync(DB_FILE, JSON.stringify({ users: [], tickets: [] }));
+  }
   return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
 }
 function writeDB(data) {
@@ -39,44 +41,91 @@ function secondsUntilNextRotation() {
   return QR_INTERVAL - (now % QR_INTERVAL);
 }
 
-// ── PAGE PRINCIPALE ──
+// ── PAGES ──
 app.get('/', function(req, res) {
-  res.sendFile(path.join(__dirname, 'public/index.html'));
+  res.sendFile(path.join(__dirname, 'public/home.html'));
+});
+app.get('/register', function(req, res) {
+  res.sendFile(path.join(__dirname, 'public/register.html'));
+});
+app.get('/login', function(req, res) {
+  res.sendFile(path.join(__dirname, 'public/login.html'));
+});
+app.get('/dashboard', function(req, res) {
+  res.sendFile(path.join(__dirname, 'public/dashboard.html'));
+});
+app.get('/ticket/:token', function(req, res) {
+  res.sendFile(path.join(__dirname, 'public/ticket.html'));
 });
 
-// ── ADMIN: ENREGISTRER CARTE ──
-app.post('/api/admin/register-card', function(req, res) {
+// ── INSCRIPTION CLIENT ──
+app.post('/api/register', function(req, res) {
   var body = req.body;
-  if (body.adminKey !== ADMIN_KEY) {
-    return res.status(403).json({ error: 'Accès refusé' });
+  var name = body.name;
+  var email = body.email;
+  var phone = body.phone;
+  var cardNumber = String(body.cardNumber || '').replace(/\s/g, '');
+  var password = body.password;
+
+  if (!name || !email || !cardNumber || !password) {
+    return res.status(400).json({ error: 'Champs manquants' });
   }
-
-  var cardNumber = String(body.cardNumber).replace(/\s/g, '');
-  var ownerName = body.ownerName || 'Usager';
-
-  if (!cardNumber) return res.status(400).json({ error: 'cardNumber manquant' });
 
   var db = readDB();
   var cardHash = hmacSign(cardNumber);
-  var cardLast4 = cardNumber.slice(-4);
+  var emailExists = db.users.find(function(u) { return u.email === email; });
+  var cardExists = db.users.find(function(u) { return u.cardHash === cardHash; });
 
-  var exists = db.cards.find(function(c) { return c.cardHash === cardHash; });
-  if (exists) return res.status(409).json({ error: 'Carte déjà enregistrée' });
+  if (emailExists) return res.status(409).json({ error: 'Email déjà utilisé' });
+  if (cardExists) return res.status(409).json({ error: 'Carte déjà enregistrée' });
 
-  db.cards.push({
+  var user = {
     id: crypto.randomBytes(8).toString('hex'),
+    name: name,
+    email: email,
+    phone: phone || '',
     cardHash: cardHash,
-    cardLast4: cardLast4,
-    ownerName: ownerName,
-    registeredAt: Date.now(),
+    cardLast4: cardNumber.slice(-4),
+    passwordHash: hmacSign(password),
+    createdAt: Date.now(),
     active: true
-  });
+  };
 
+  db.users.push(user);
   writeDB(db);
-  res.json({ success: true, message: 'Carte enregistrée', cardLast4: cardLast4 });
+
+  res.json({ success: true, message: 'Compte créé', userId: user.id });
 });
 
-// ── VALIDATION DEPUIS VALIDEUR/RASPBERRY ──
+// ── LOGIN ──
+app.post('/api/login', function(req, res) {
+  var body = req.body;
+  var email = body.email;
+  var password = body.password;
+
+  var db = readDB();
+  var user = db.users.find(function(u) {
+    return u.email === email && u.passwordHash === hmacSign(password);
+  });
+
+  if (!user) return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
+  if (!user.active) return res.status(403).json({ error: 'Compte désactivé' });
+
+  var token = Buffer.from(JSON.stringify({
+    userId: user.id,
+    exp: Math.floor(Date.now() / 1000) + 86400,
+    sig: hmacSign(user.id)
+  })).toString('base64');
+
+  res.json({
+    success: true,
+    token: token,
+    name: user.name,
+    cardLast4: user.cardLast4
+  });
+});
+
+// ── VALIDATION DEPUIS VALIDEUR ──
 app.post('/api/validate', function(req, res) {
   var body = req.body;
   var cardNumber = String(body.cardNumber || '').replace(/\s/g, '');
@@ -88,13 +137,13 @@ app.post('/api/validate', function(req, res) {
 
   var db = readDB();
   var cardHash = hmacSign(cardNumber);
-  var card = db.cards.find(function(c) { return c.cardHash === cardHash && c.active; });
+  var user = db.users.find(function(u) { return u.cardHash === cardHash && u.active; });
 
-  if (!card) {
+  if (!user) {
     return res.status(403).json({
-      error: 'Carte non autorisée',
+      error: 'Carte non enregistrée',
       registered: false,
-      message: 'Cette carte n\'est pas enregistrée pour le tramway'
+      message: 'Carte non autorisée pour le tramway'
     });
   }
 
@@ -105,8 +154,9 @@ app.post('/api/validate', function(req, res) {
 
   var ticketData = {
     ticketId: ticketId,
-    ownerName: card.ownerName,
-    cardLast4: card.cardLast4,
+    userId: user.id,
+    name: user.name,
+    cardLast4: user.cardLast4,
     amount: amount,
     line: line,
     station: station,
@@ -128,11 +178,10 @@ app.post('/api/validate', function(req, res) {
   res.json({
     success: true,
     registered: true,
-    ownerName: card.ownerName,
+    name: user.name,
     accessToken: accessToken,
     ticketUrl: '/ticket/' + accessToken,
-    expiresAt: expiresAt,
-    ttlMinutes: 60
+    expiresAt: expiresAt
   });
 });
 
@@ -186,11 +235,6 @@ app.get('/api/qr-refresh/:token', function(req, res) {
   } catch(e) {
     res.status(400).json({ error: 'Erreur' });
   }
-});
-
-// ── PAGE TICKET ──
-app.get('/ticket/:token', function(req, res) {
-  res.sendFile(path.join(__dirname, 'public/index.html'));
 });
 
 var PORT = process.env.PORT || 3000;
