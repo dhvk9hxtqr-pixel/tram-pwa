@@ -1,60 +1,110 @@
 const express = require('express');
 const crypto = require('crypto');
 const path = require('path');
+const fs = require('fs');
 const app = express();
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 const SECRET_KEY = process.env.SECRET_KEY || 'tramway_secret_pfe_2024';
-const QR_INTERVAL = 30;
+const QR_INTERVAL = 15;
 const TICKET_TTL = 60 * 60;
+const DB_FILE = path.join(__dirname, 'users.json');
+
+// ── DATABASE JSON ──
+function readDB() {
+  if (!fs.existsSync(DB_FILE)) fs.writeFileSync(DB_FILE, JSON.stringify({ users: [] }));
+  return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+}
+function writeDB(data) {
+  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+}
 
 const activeTickets = new Map();
-
-function generateTicketId() {
-  return crypto.randomBytes(16).toString('hex');
-}
 
 function hmacSign(data, key) {
   key = key || SECRET_KEY;
   return crypto.createHmac('sha256', key).update(data).digest('hex');
 }
-
 function generateTOTP(ticketId, timeStep) {
   var step = timeStep !== undefined ? timeStep : Math.floor(Date.now() / 1000 / QR_INTERVAL);
-  var payload = ticketId + ':' + step;
-  return hmacSign(payload).substring(0, 32);
+  return hmacSign(ticketId + ':' + step).substring(0, 32);
 }
-
 function getCurrentTimeStep() {
   return Math.floor(Date.now() / 1000 / QR_INTERVAL);
 }
-
 function secondsUntilNextRotation() {
   var now = Math.floor(Date.now() / 1000);
   return QR_INTERVAL - (now % QR_INTERVAL);
 }
 
+// ── ROUTES ──
+
+// Page principale
 app.get('/', function(req, res) {
   res.sendFile(path.join(__dirname, 'public/index.html'));
 });
 
+// Inscription carte
+app.post('/api/register', function(req, res) {
+  var body = req.body;
+  var cardNumber = body.cardNumber;
+  var name = body.name;
+  var phone = body.phone;
+
+  if (!cardNumber || !name || !phone) {
+    return res.status(400).json({ error: 'Données manquantes' });
+  }
+
+  var db = readDB();
+  var cardLast4 = String(cardNumber).slice(-4);
+  var cardHash = hmacSign(String(cardNumber));
+
+  var exists = db.users.find(function(u) { return u.cardHash === cardHash; });
+  if (exists) return res.status(409).json({ error: 'Carte déjà enregistrée' });
+
+  var user = {
+    id: crypto.randomBytes(8).toString('hex'),
+    name: name,
+    phone: phone,
+    cardLast4: cardLast4,
+    cardHash: cardHash,
+    createdAt: Date.now()
+  };
+
+  db.users.push(user);
+  writeDB(db);
+
+  res.json({ success: true, message: 'Carte enregistrée', userId: user.id });
+});
+
+// Validation depuis valideur/Raspberry Pi
 app.post('/api/validate', function(req, res) {
   var body = req.body;
-  var cardLast4 = body.cardLast4 || '****';
+  var cardNumber = body.cardNumber;
   var amount = body.amount || '1.80';
   var line = body.line || 'T1';
   var station = body.station || 'Centre-Ville';
 
-  var ticketId = generateTicketId();
+  if (!cardNumber) return res.status(400).json({ error: 'cardNumber manquant' });
+
+  var db = readDB();
+  var cardHash = hmacSign(String(cardNumber));
+  var user = db.users.find(function(u) { return u.cardHash === cardHash; });
+
+  if (!user) return res.status(403).json({ error: 'Carte non enregistrée', registered: false });
+
+  var ticketId = crypto.randomBytes(16).toString('hex');
   var issuedAt = Math.floor(Date.now() / 1000);
   var expiresAt = issuedAt + TICKET_TTL;
   var sessionId = crypto.randomBytes(8).toString('hex');
 
   var ticketData = {
     ticketId: ticketId,
-    cardLast4: cardLast4,
+    userId: user.id,
+    name: user.name,
+    cardLast4: user.cardLast4,
     amount: amount,
     line: line,
     station: station,
@@ -71,6 +121,8 @@ app.post('/api/validate', function(req, res) {
 
   res.json({
     success: true,
+    registered: true,
+    userName: user.name,
     accessToken: accessToken,
     ticketUrl: '/ticket/' + accessToken,
     expiresAt: expiresAt,
@@ -78,6 +130,7 @@ app.post('/api/validate', function(req, res) {
   });
 });
 
+// Récupérer ticket
 app.get('/api/ticket/:token', function(req, res) {
   try {
     var raw = Buffer.from(req.params.token, 'base64').toString('utf8');
@@ -86,29 +139,26 @@ app.get('/api/ticket/:token', function(req, res) {
     var exp = parsed.exp;
     var sig = parsed.sig;
 
-    var expectedSig = hmacSign(ticketId + ':' + exp);
-    if (sig !== expectedSig) return res.status(403).json({ error: 'Token invalide' });
+    if (hmacSign(ticketId + ':' + exp) !== sig) return res.status(403).json({ error: 'Token invalide' });
 
     var now = Math.floor(Date.now() / 1000);
-    if (now > exp) return res.status(410).json({ error: 'Expire', expired: true });
+    if (now > exp) return res.status(410).json({ error: 'Expiré', expired: true });
 
     var ticket = activeTickets.get(ticketId);
     if (!ticket) return res.status(404).json({ error: 'Ticket introuvable' });
 
-    var qrToken = generateTOTP(ticketId, getCurrentTimeStep());
-    var nextRotation = secondsUntilNextRotation();
-
     var result = Object.assign({}, ticket);
-    result.qrToken = qrToken;
-    result.nextRotationIn = nextRotation;
+    result.qrToken = generateTOTP(ticketId, getCurrentTimeStep());
+    result.nextRotationIn = secondsUntilNextRotation();
     result.remainingSeconds = exp - now;
 
     res.json(result);
   } catch(e) {
-    res.status(400).json({ error: 'Token malforme' });
+    res.status(400).json({ error: 'Token malformé' });
   }
 });
 
+// Refresh QR
 app.get('/api/qr-refresh/:token', function(req, res) {
   try {
     var raw = Buffer.from(req.params.token, 'base64').toString('utf8');
@@ -117,18 +167,14 @@ app.get('/api/qr-refresh/:token', function(req, res) {
     var exp = parsed.exp;
     var sig = parsed.sig;
 
-    var expectedSig = hmacSign(ticketId + ':' + exp);
-    if (sig !== expectedSig) return res.status(403).json({ error: 'Invalide' });
+    if (hmacSign(ticketId + ':' + exp) !== sig) return res.status(403).json({ error: 'Invalide' });
 
     var now = Math.floor(Date.now() / 1000);
-    if (now > exp) return res.status(410).json({ error: 'Expire', expired: true });
-
-    var qrToken = generateTOTP(ticketId);
-    var nextRotation = secondsUntilNextRotation();
+    if (now > exp) return res.status(410).json({ error: 'Expiré', expired: true });
 
     res.json({
-      qrToken: qrToken,
-      nextRotationIn: nextRotation,
+      qrToken: generateTOTP(ticketId),
+      nextRotationIn: secondsUntilNextRotation(),
       remainingSeconds: exp - now
     });
   } catch(e) {
@@ -136,11 +182,12 @@ app.get('/api/qr-refresh/:token', function(req, res) {
   }
 });
 
+// Page ticket
 app.get('/ticket/:token', function(req, res) {
   res.sendFile(path.join(__dirname, 'public/index.html'));
 });
 
 var PORT = process.env.PORT || 3000;
 app.listen(PORT, function() {
-  console.log('Serveur demarre sur port ' + PORT);
+  console.log('Serveur tram-pwa sur port ' + PORT);
 });
